@@ -22,7 +22,7 @@ const isNum = (v) => v !== '' && Number.isInteger(Number(v)) && Number(v) >= 0 &
 
 export default function App() {
   const [phase, setPhase] = useState(PHASE.SETUP)
-  const [players, setPlayers] = useState(['', ''])
+  const [players, setPlayers] = useState([''])
   const [round, setRound] = useState(0) // 0-indexed
   const [grid, setGrid] = useState([]) // current round working data
   // roundScores: array (per finished round) of points-per-player => number[]
