@@ -184,5 +184,5 @@ body {
 .result-table .pts.strong { color: var(--text); font-size: 18px; }
 
 .breakdown { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 8px; }
-.breakdown summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 8px 0; }
+.breakdown summary { cursor: pointer; color: var(--muted); font-size: 20px;font-weight:bold; padding: 8px 0; }
 .breakdown summary:hover { color: var(--text); }
