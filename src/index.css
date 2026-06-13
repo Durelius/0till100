@@ -186,3 +186,77 @@ body {
 .breakdown { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 8px; }
 .breakdown summary { cursor: pointer; color: var(--muted); font-size: 20px;font-weight:bold; padding: 8px 0; }
 .breakdown summary:hover { color: var(--text); }
+
+/* "Vi har inga kort!" — secondary option at the bottom of setup */
+.nocards {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.btn.link {
+  background: transparent;
+  border: none;
+  color: var(--accent2);
+  font-size: 16px;
+  padding: 6px 10px;
+}
+.btn.link:hover:not(:disabled) { background: transparent; text-decoration: underline; filter: brightness(1.1); }
+.nocards-hint { color: var(--muted); font-size: 13px; }
+
+/* Question-text rows shown in no-cards mode */
+.qtext-row td.qtext {
+  text-align: left;
+  padding: 14px 8px 4px;
+  font-size: 15px;
+  line-height: 1.35;
+  border-bottom: none;
+  color: var(--text);
+}
+.qtext .qnum { color: var(--accent2); font-weight: 700; margin-right: 4px; }
+
+/* No-cards summary: expanded question-by-question walkthrough */
+.review { margin-top: 22px; }
+.review-title {
+  font-size: 14px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0 0 12px;
+}
+.review-q {
+  background: #12152e;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.review-num { color: var(--muted); font-size: 13px; font-weight: 600; }
+.review-answer { color: var(--muted); font-size: 14px; }
+.review-answer strong { color: var(--accent2); font-size: 22px; }
+.review-text { margin: 2px 0 12px; font-size: 16px; line-height: 1.35; }
+.review-guesses { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.review-guesses li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.review-guesses li.exact { background: rgba(255, 209, 102, 0.1); color: var(--gold); }
+.rg-name { font-weight: 600; }
+.rg-guess { color: var(--muted); font-size: 14px; }
+.rg-pts { font-weight: 800; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }

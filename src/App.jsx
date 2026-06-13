@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { NUM_ROUNDS, QUESTIONS_PER_ROUND, EXACT_BONUS } from './config.js'
+import QUESTION_BANK from './data/questions.json'
 
 // Scoring: points = |guess - answer|. Exact guess => EXACT_BONUS (-10).
 // Like golf: lowest total wins.
@@ -9,21 +10,46 @@ function scoreFor(guess, answer) {
 }
 
 const PHASE = { SETUP: 'setup', ROUND: 'round', SUMMARY: 'summary', DONE: 'done' }
+const MODE = { CARDS: 'cards', NOCARDS: 'nocards' }
 
-// Build an empty grid: one row per question, one guess slot per player.
-function emptyGrid(numPlayers) {
-  return Array.from({ length: QUESTIONS_PER_ROUND }, () => ({
-    answer: '',
+// Build a grid: one row per question, one guess slot per player.
+// In "no cards" mode `questions` is a 7-long array of { question, answer };
+// the answer is prefilled (hidden until scored) and the question text is shown.
+function buildGrid(numPlayers, questions) {
+  return Array.from({ length: QUESTIONS_PER_ROUND }, (_, i) => ({
+    question: questions ? questions[i].question : null,
+    answer: questions ? String(questions[i].answer) : '',
     guesses: Array.from({ length: numPlayers }, () => ''),
   }))
+}
+
+// Pick NUM_ROUNDS × QUESTIONS_PER_ROUND distinct questions and chunk into rounds.
+function drawDeck() {
+  const need = NUM_ROUNDS * QUESTIONS_PER_ROUND
+  // Only draw questions whose answer is a valid 0–100 integer (the game's range).
+  const pool = QUESTION_BANK.filter(
+    (q) => Number.isInteger(q.answer) && q.answer >= 0 && q.answer <= 100,
+  )
+  // Fisher–Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[pool[i], pool[j]] = [pool[j], pool[i]]
+  }
+  // If the bank is smaller than needed, allow repeats by cycling.
+  const picked = Array.from({ length: need }, (_, i) => pool[i % pool.length])
+  return Array.from({ length: NUM_ROUNDS }, (_, r) =>
+    picked.slice(r * QUESTIONS_PER_ROUND, (r + 1) * QUESTIONS_PER_ROUND),
+  )
 }
 
 const isNum = (v) => v !== '' && Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 100
 
 export default function App() {
   const [phase, setPhase] = useState(PHASE.SETUP)
+  const [mode, setMode] = useState(MODE.CARDS)
 const [players, setPlayers] = useState([''])
   const [round, setRound] = useState(0) // 0-indexed
+  const [deck, setDeck] = useState(null) // no-cards mode: questions per round
   const [grid, setGrid] = useState([]) // current round working data
   // roundScores: array (per finished round) of points-per-player => number[]
   const [roundScores, setRoundScores] = useState([])
@@ -44,20 +70,25 @@ const [players, setPlayers] = useState([''])
   function removePlayer(i) {
     setPlayers((p) => (p.length > 1 ? p.filter((_, idx) => idx !== i) : p))
   }
-  function startGame() {
+  function startGame(useCards) {
     const cleaned = players.map((p) => p.trim()).filter(Boolean)
     if (cleaned.length < 1) return
+    const newDeck = useCards ? null : drawDeck()
     setPlayers(cleaned)
+    setMode(useCards ? MODE.CARDS : MODE.NOCARDS)
+    setDeck(newDeck)
     setRoundScores([])
     setRound(0)
-    setGrid(emptyGrid(cleaned.length))
+    setGrid(buildGrid(cleaned.length, newDeck ? newDeck[0] : null))
     setPhase(PHASE.ROUND)
   }
 
   // ---- Tab moves DOWN a column, wrapping to the top of the next column ----
   // Columns 0..players.length-1 are players; the last column is "Rätt svar".
   const cellRefs = useRef({})
-  const numCols = players.length + 1
+  const noCards = mode === MODE.NOCARDS
+  // No editable answer column in no-cards mode, so Tab cycles players only.
+  const numCols = noCards ? players.length : players.length + 1
   function handleTab(e, qi, col) {
     if (e.key !== 'Tab') return
     e.preventDefault()
@@ -105,8 +136,9 @@ const [players, setPlayers] = useState([''])
   function nextRound() {
     setRoundScores((rs) => [...rs, currentRoundPoints])
     if (round + 1 < NUM_ROUNDS) {
-      setRound(round + 1)
-      setGrid(emptyGrid(players.length))
+      const nextR = round + 1
+      setRound(nextR)
+      setGrid(buildGrid(players.length, deck ? deck[nextR] : null))
       setPhase(PHASE.ROUND)
     } else {
       setPhase(PHASE.DONE)
@@ -115,6 +147,8 @@ const [players, setPlayers] = useState([''])
 
   function restart() {
     setPhase(PHASE.SETUP)
+    setMode(MODE.CARDS)
+    setDeck(null)
     setRoundScores([])
     setRound(0)
     setGrid([])
@@ -131,6 +165,8 @@ const [players, setPlayers] = useState([''])
       <header className="header">
         <h1>0–100</h1>
         <p className="tag">Svarsblankett · lägst poäng vinner, precis som golf</p>
+    <br/>
+        <p className="tag">Varför vinner pappa varje gång?</p>
       </header>
 
       {phase === PHASE.SETUP && (
@@ -159,7 +195,7 @@ const [players, setPlayers] = useState([''])
             </button>
             <button
               className="btn primary"
-              onClick={startGame}
+              onClick={() => startGame(true)}
               disabled={players.filter((p) => p.trim()).length < 1}
             >
               Starta spel
@@ -167,9 +203,22 @@ const [players, setPlayers] = useState([''])
           </div>
           <p className="rules">
             {NUM_ROUNDS} rundor × {QUESTIONS_PER_ROUND} frågor. Frågorna kommer från korten.
-            Skriv in allas gissningar under rundan, fyll i facit på slutet — poängen räknas ut åt er.
+            Skriv in dina gissningar under rundan, fyll i facit på slutet — poängen räknas ut åt er.
             Avstånd till rätt svar = poäng. Exakt rätt ger {EXACT_BONUS} poäng.
           </p>
+
+          <div className="nocards">
+            <button
+              className="btn link"
+              onClick={() => startGame(false)}
+              disabled={players.filter((p) => p.trim()).length < 1}
+            >
+              Vi har inga kort! 🎲
+            </button>
+            <span className="nocards-hint">
+              Spela med slumpade frågor ur appen ({QUESTION_BANK.length} st) — facit kommer automatiskt.
+            </span>
+          </div>
         </section>
       )}
 
@@ -177,11 +226,15 @@ const [players, setPlayers] = useState([''])
         <section className="card">
           <div className="meta">
             <span className="pill">Runda {round + 1}/{NUM_ROUNDS}</span>
-            <span className="pill muted">{QUESTIONS_PER_ROUND} frågor</span>
+            <span className="pill muted">{noCards ? 'Utan kort 🎲' : `${QUESTIONS_PER_ROUND} frågor`}</span>
           </div>
-          <h2>Fyll i gissningar</h2>
+          <h2>{noCards ? 'Gissa talen' : 'Fyll i gissningar'}</h2>
           <p className="hint">
-            Skriv allas gissningar (0–100). Fyll i <strong>Rätt svar</strong> när rundan är slut.
+            {noCards ? (
+              <>Skriv allas gissningar (0–100). Facit visas när ni räknar ut rundan.</>
+            ) : (
+              <>Skriv allas gissningar (0–100). Fyll i <strong>Rätt svar</strong> när rundan är slut.</>
+            )}
           </p>
 
           <div className="sheet-wrap">
@@ -192,43 +245,54 @@ const [players, setPlayers] = useState([''])
                   {players.map((name, i) => (
                     <th key={i} className="pcol">{name}</th>
                   ))}
-                  <th className="acol">Rätt svar</th>
+                  {!noCards && <th className="acol">Rätt svar</th>}
                 </tr>
               </thead>
               <tbody>
                 {grid.map((row, qi) => (
-                  <tr key={qi}>
-                    <td className="qcol">{qi + 1}</td>
-                    {row.guesses.map((g, pi) => (
-                      <td key={pi}>
-                        <input
-                          ref={(el) => { cellRefs.current[`${qi}-${pi}`] = el }}
-                          className={`cell ${g !== '' && !isNum(g) ? 'bad' : ''}`}
-                          type="number"
-                          min="0"
-                          max="100"
-                          inputMode="numeric"
-                          value={g}
-                          onChange={(e) => setGuess(qi, pi, e.target.value)}
-                          onKeyDown={(e) => handleTab(e, qi, pi)}
-                        />
-                      </td>
-                    ))}
-                    <td>
-                      <input
-                        ref={(el) => { cellRefs.current[`${qi}-${players.length}`] = el }}
-                        className={`cell answer ${row.answer !== '' && !isNum(row.answer) ? 'bad' : ''}`}
-                        type="number"
-                        min="0"
-                        max="100"
-                        inputMode="numeric"
-                        placeholder="facit"
-                        value={row.answer}
-                        onChange={(e) => setAnswer(qi, e.target.value)}
-                        onKeyDown={(e) => handleTab(e, qi, players.length)}
-                      />
-                    </td>
-                  </tr>
+                  <Fragment key={qi}>
+                    {noCards && (
+                      <tr className="qtext-row">
+                        <td className="qtext" colSpan={players.length + 1}>
+                          <span className="qnum">{qi + 1}.</span> {row.question}
+                        </td>
+                      </tr>
+                    )}
+                    <tr>
+                      <td className="qcol">{noCards ? '' : qi + 1}</td>
+                      {row.guesses.map((g, pi) => (
+                        <td key={pi}>
+                          <input
+                            ref={(el) => { cellRefs.current[`${qi}-${pi}`] = el }}
+                            className={`cell ${g !== '' && !isNum(g) ? 'bad' : ''}`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            inputMode="numeric"
+                            value={g}
+                            onChange={(e) => setGuess(qi, pi, e.target.value)}
+                            onKeyDown={(e) => handleTab(e, qi, pi)}
+                          />
+                        </td>
+                      ))}
+                      {!noCards && (
+                        <td>
+                          <input
+                            ref={(el) => { cellRefs.current[`${qi}-${players.length}`] = el }}
+                            className={`cell answer ${row.answer !== '' && !isNum(row.answer) ? 'bad' : ''}`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            inputMode="numeric"
+                            placeholder="facit"
+                            value={row.answer}
+                            onChange={(e) => setAnswer(qi, e.target.value)}
+                            onKeyDown={(e) => handleTab(e, qi, players.length)}
+                          />
+                        </td>
+                      )}
+                    </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -277,7 +341,11 @@ const [players, setPlayers] = useState([''])
             </tbody>
           </table>
 
-          <PerQuestionBreakdown players={players} grid={grid} />
+          {noCards ? (
+            <QuestionReview players={players} grid={grid} />
+          ) : (
+            <PerQuestionBreakdown players={players} grid={grid} />
+          )}
 
           <button className="btn primary big" onClick={nextRound}>
             {round + 1 < NUM_ROUNDS ? 'Nästa runda' : 'Visa slutresultat'}
@@ -294,6 +362,43 @@ const [players, setPlayers] = useState([''])
           </button>
         </section>
       )}
+    </div>
+  )
+}
+
+// No-cards summary: walk through every question with its answer and everyone's
+// guesses, shown expanded so the group can read it out loud and discuss.
+function QuestionReview({ players, grid }) {
+  return (
+    <div className="review">
+      <h3 className="review-title">Genomgång – läs upp och diskutera</h3>
+      {grid.map((row, qi) => {
+        const a = Number(row.answer)
+        const guesses = players
+          .map((name, i) => {
+            const guess = Number(row.guesses[i])
+            return { name, guess, pts: scoreFor(guess, a) }
+          })
+          .sort((x, y) => x.pts - y.pts)
+        return (
+          <div className="review-q" key={qi}>
+            <div className="review-head">
+              <span className="review-num">Fråga {qi + 1}</span>
+              <span className="review-answer">Rätt svar: <strong>{a}</strong></span>
+            </div>
+            <p className="review-text">{row.question}</p>
+            <ul className="review-guesses">
+              {guesses.map((r, i) => (
+                <li key={i} className={r.pts < 0 ? 'exact' : ''}>
+                  <span className="rg-name">{r.name}</span>
+                  <span className="rg-guess">gissade {r.guess}</span>
+                  <span className="rg-pts">{r.pts < 0 ? `${r.pts} 🎯` : `+${r.pts}`}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -315,18 +420,27 @@ function PerQuestionBreakdown({ players, grid }) {
             {grid.map((row, qi) => {
               const a = Number(row.answer)
               return (
-                <tr key={qi}>
-                  <td className="qcol">{qi + 1}</td>
-                  {row.guesses.map((g, pi) => {
-                    const pts = scoreFor(Number(g), a)
-                    return (
-                      <td key={pi} className={pts < 0 ? 'exact' : ''}>
-                        {g} <span className="sub">({pts >= 0 ? `+${pts}` : pts})</span>
+                <Fragment key={qi}>
+                  {row.question && (
+                    <tr className="qtext-row">
+                      <td className="qtext" colSpan={players.length + 2}>
+                        <span className="qnum">{qi + 1}.</span> {row.question}
                       </td>
-                    )
-                  })}
-                  <td className="acol strong">{a}</td>
-                </tr>
+                    </tr>
+                  )}
+                  <tr>
+                    <td className="qcol">{qi + 1}</td>
+                    {row.guesses.map((g, pi) => {
+                      const pts = scoreFor(Number(g), a)
+                      return (
+                        <td key={pi} className={pts < 0 ? 'exact' : ''}>
+                          {g} <span className="sub">({pts >= 0 ? `+${pts}` : pts})</span>
+                        </td>
+                      )
+                    })}
+                    <td className="acol strong">{a}</td>
+                  </tr>
+                </Fragment>
               )
             })}
           </tbody>
